@@ -7,3 +7,4 @@ Table multiline text bla bla bla bla
                         blank line below is important 
 
 ----------------------------------------------------------------
+![Result][animated/animation.gif]
