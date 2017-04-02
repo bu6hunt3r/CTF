@@ -7,4 +7,4 @@
 >                        blank line below is important 
 
 ----------------------------------------------------------------
-![Result](https://github.com/bu6hunt3r/CTF/tree/master/2017/NuitDuHack2017/YouTerminatedMe/animated/animation.gif)
+![](https://github.com/bu6hunt3r/CTF/tree/master/2017/NuitDuHack2017/YouTerminatedMe/animated/animation.gif)
