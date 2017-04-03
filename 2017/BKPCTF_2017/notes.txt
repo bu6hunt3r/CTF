@@ -1,0 +1,27 @@
+I MemoPointers array gets updated fully by user supplied input (Index will be searched by input).
+
+II Before we realease a fastbin from train, malloc checks if single linked list is corrupted. It evaluates if size of chunk pointed to by fd has same size than theo one requested.
+
+=> III Index seems to be only existant for notes array
+
+-----------------------------------------------
+1. In a first step we allocate three notes:
+	Malloc chunk @ 0x603000 [allocated]  
+	Malloc chunk @ 0x603030 [allocated]
+	Malloc chunk @ 0x603060 [allocated] 
+	
+	Notes array @ 0x602a70 gets updated correctly
+
+-----------------------------------------------
+2. First two notes got freedin order 1->0, and note array @ 0x602a70 will be updated correctly. Means that fastbin train now looks like:
+note0->fd = note1
+
+-----------------------------------------------
+3. Now we are able to overflow second chunk...
+And second chunk's (already free'd) fd pointer will point to user supplied password buffer (0x602a38) 
+
+0x603030->fd =  0x602a38 Linked list corrupted 
+ But 0x31 is a valid size. Fastbin train now looks line: note1
+Notes array will be updated with matching addysto index with incorrect position within array itself. Index0 will conatain third chunk e.g.
+
+If we allocate a new note at index 0, binary searches in it's array where index 0 is finds 0x603070 e.g. 
