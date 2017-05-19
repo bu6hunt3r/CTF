@@ -1,0 +1,30 @@
+digraph code {
+	graph [bgcolor=white fontsize=8 fontname="Courier"];
+	node [fillcolor=gray style=filled shape=box];
+	edge [arrowhead="vee"];
+	"0x0040272e" -> "0x0040276c" [color="green"];
+	"0x0040272e" -> "0x00402758" [color="red"];
+	"0x0040272e" [URL="main/0x0040272e", fillcolor="yellow", color="black", label="/ (fcn) main 219\l|   main ();\l| ; var int local_b0h @ rbp-0xb0\l| ; var int local_70h @ rbp-0x70\l| ; var int local_30h @ rbp-0x30\l| ; var int local_10h @ rbp-0x10\l| ; var int local_ch @ rbp-0xc\l| ; var int local_8h @ rbp-0x8\l| ; var int local_4h @ rbp-0x4\l| 0x0040272e      push rbp\l| 0x0040272f      mov rbp, rsp\l| 0x00402732      sub rsp, 0xb0\l| 0x00402739      lea rax, qword [rbp - local_30h]\l| 0x0040273d      mov edx, 0x20\l| 0x00402742      mov rsi, rax\l| 0x00402745      mov edi, 0\l| 0x0040274a      call sym.imp.read\l| 0x0040274f      mov dword [rbp - local_8h], eax\l| 0x00402752      cmp dword [rbp - local_8h], 0x20\l| 0x00402756      je 0x40276c\l"]
+	"0x00402758" -> "0x00402807" [color="blue"];
+	"0x00402758" [URL="main/0x00402758", fillcolor="lightgray", color="black", label="| 0x00402758      mov edi, str.Short_input_n\l| 0x0040275d      call sym.imp.puts\l| 0x00402762      mov eax, 0xffffffff\l| 0x00402767      jmp 0x402807\l"]
+	"0x0040276c" -> "0x004027af" [color="blue"];
+	"0x0040276c" [URL="main/0x0040276c", fillcolor="lightgray", color="black", label="| 0x0040276c      mov dword [rbp - local_4h], 0\l| 0x00402773      jmp 0x4027af\l"]
+	"0x00402775" -> "0x004027af" [color="blue"];
+	"0x00402775" [URL="main/0x00402775", fillcolor="lightgray", color="black", label="| 0x00402775      mov eax, dword [rbp - local_4h]\l| 0x00402778      add eax, eax\l| 0x0040277a      cdqe\l| 0x0040277c      movzx eax, byte [rbp + rax - 0x30]\l| 0x00402781      movsx edx, al\l| 0x00402784      mov eax, dword [rbp - local_4h]\l| 0x00402787      cdqe\l| 0x00402789      mov dword [rbp + rax*4 - 0xb0], edx\l| 0x00402790      mov eax, dword [rbp - local_4h]\l| 0x00402793      add eax, eax\l| 0x00402795      add eax, 1\l| 0x00402798      cdqe\l| 0x0040279a      movzx eax, byte [rbp + rax - 0x30]\l| 0x0040279f      movsx edx, al\l| 0x004027a2      mov eax, dword [rbp - local_4h]\l| 0x004027a5      cdqe\l| 0x004027a7      mov dword [rbp + rax*4 - 0x70], edx\l| 0x004027ab      add dword [rbp - local_4h], 1\l"]
+	"0x004027af" -> "0x00402775" [color="green"];
+	"0x004027af" -> "0x004027b5" [color="red"];
+	"0x004027af" [URL="main/0x004027af", fillcolor="lightgray", color="black", label="| 0x004027af      cmp dword [rbp - local_4h], 0xf\l| 0x004027b3      jle 0x402775\l"]
+	"0x004027b5" -> "0x004027f8" [color="green"];
+	"0x004027b5" -> "0x004027e6" [color="red"];
+	"0x004027b5" [URL="main/0x004027b5", fillcolor="lightgray", color="black", label="| 0x004027b5      mov eax, 0\l| 0x004027ba      call sub.sigemptyset_c77\l| 0x004027bf      lea rax, qword [rbp - local_b0h]\l| 0x004027c6      mov rdi, rax\l| 0x004027c9      call fcn.004006c6\l| 0x004027ce      mov dword [rbp - local_ch], eax\l| 0x004027d1      lea rax, qword [rbp - local_70h]\l| 0x004027d5      mov rdi, rax\l| 0x004027d8      call fcn.00400f18\l| 0x004027dd      mov dword [rbp - local_10h], eax\l| 0x004027e0      cmp dword [rbp - local_ch], 0\l| 0x004027e4      je 0x4027f8\l"]
+	"0x004027e6" -> "0x004027f8" [color="green"];
+	"0x004027e6" -> "0x004027ec" [color="red"];
+	"0x004027e6" [URL="main/0x004027e6", fillcolor="lightgray", color="black", label="| 0x004027e6      cmp dword [rbp - local_10h], 0\l| 0x004027ea      je 0x4027f8\l"]
+	"0x004027ec" -> "0x00402802" [color="blue"];
+	"0x004027ec" [URL="main/0x004027ec", fillcolor="lightgray", color="black", label="| 0x004027ec      mov edi, str.Good_flow__\l| 0x004027f1      call sym.imp.puts\l| 0x004027f6      jmp 0x402802\l"]
+	"0x004027f8" -> "0x00402802" [color="blue"];
+	"0x004027f8" [URL="main/0x004027f8", fillcolor="lightgray", color="black", label="| 0x004027f8      mov edi, str.You_aint_goin_with_the_flow....\l| 0x004027fd      call sym.imp.puts\l"]
+	"0x00402802" -> "0x00402807" [color="blue"];
+	"0x00402802" [URL="main/0x00402802", fillcolor="lightgray", color="black", label="| 0x00402802      mov eax, 0\l"]
+	"0x00402807" [URL="main/0x00402807", fillcolor="lightgray", color="black", label="| 0x00402807      leave\l\\ 0x00402808      ret\l"]
+}
