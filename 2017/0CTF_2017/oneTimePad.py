@@ -6,6 +6,7 @@ from os import urandom
 def process(m, k):
     tmp = m ^ k
     res = 0
+    import pdb; pdb.set_trace()
     for i in bin(tmp)[2:]:
         res = res << 1;
         if (int(i)):
