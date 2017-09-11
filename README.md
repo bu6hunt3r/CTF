@@ -15,6 +15,37 @@
 |i~nx			|Check NX bit				|
 |i~pic			|Check if Position Independent Code     |
 
+### Analyzing
+| cmd 				| aim 					|
+--------------------------------|--------------------------------------:|
+|aas				|Analyze symbols			|
+|iz				|List all strings in binary		|
+
+### Flags
+| cmd 				| aim 					|
+--------------------------------|--------------------------------------:|
+|fs				|Manage flagspaces			|
+|fs imports; f			|Show imports in flagspace       	|
+|fs strings; f			|Show strings in flagspace       	|
+
+
+
+### Xrefs
+| cmd 				| aim 					|
+--------------------------------|--------------------------------------:|
+|axt @ [addr|sym]		|Show xrefs to				|
+|axf @ [addr|sym]		|Show xrefs from			|A
+
+### Iterators
+| cmd 				| aim 					|
+--------------------------------|--------------------------------------:|
+|cmd @@=addr			|Do cmd at every addy in list 		|
+|cmd @@ sym.*			|Run cmd over all flags matching 'sym.' |
+
+### Base conversion
+| cmd 				| aim 					|
+--------------------------------|--------------------------------------:|
+|ahi [base]			|Define numeric base			|
 
 ### Memory
 | cmd 				| aim 					|
@@ -41,7 +72,8 @@
 |dcu addr			|Continue execution until address	|
 |dcr				|Continue execution until ret		|
 |dbt				|Display backtrace			|
-|doo [args			|Reopen in debugger mode		|
+|doo 				|Reopen in debugger mode		|
+|ood 				|Reopen in debugger mode with args	|
 |ds				|Step one instruction			|
 |dso				|Step over				|
 
@@ -53,4 +85,5 @@
 |V				|Visual mode, use p/P to toggle between different modes 	|
 |VV				|Visual Graph mode, navigating through ASCII graph		|
 |V!				|Visual panels mode. Very useful for exploitation		|
+
 
