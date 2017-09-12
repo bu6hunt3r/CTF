@@ -3,6 +3,12 @@
 - The goal of this challenge is to gain RCE via a variant of unlink macro used by libc.
 - In simplified terms this program will release an node out of a double linked list that we fully control.
 
+## Vulnerability description
+> Main creates three chunks on heap, will crate a double linked list consisting of that chunks and is calling ```gets()``` at the end. Our input will be copied to first chunk and theres no sanitazation of the same.
+
+> Thanks to hat overflow vulnerabilty we are able to copy a payload into first chunk, overwrite meta information of heap chunks and spawn shell with use of ```shell()``` routine provided by ```main()```
+
+## Recon
 The routine that is responsible for unlinking a node out of double linked list gave me flashbacks on famous ```unlink()``` macro implemented in dlmalloc/ptmalloc, but with no security mitigations.
 
 While running main, it creates three chunks (called A, B and C onwards) on the heap. Each chunk is defined as struct the same manner:
@@ -71,7 +77,7 @@ After instruction @ 0x0804859f got executed, we got situation graphically demons
 |               |           |               |           |               |  / 
 +---------------+           +---------------+           +---------------+
 ```
-The following code snippet shows the routine that will be called by main in executable:
+The following code snippet shows the "unlinking" routine that will be called by main in executable:
 
 ```C
 void unlink(OBJ* P){
@@ -83,3 +89,21 @@ void unlink(OBJ* P){
 	BK->fd=FD;
 }
 ```
+
+Remarkably there is no check for corruption in linked list like the one in malloc.c when using libc's ```ptmalloc``` implementation out of the box:
+
+```C
+#define unlink(P, BK, FD) {                                            \
+  FD = P->fd;                                                          \
+  BK = P->bk;                                                          \
+  if (__builtin_expect (FD->bk != P || BK->fd != P, 0))                \
+    malloc_printerr (check_action, "corrupted double-linked list", P); \
+  else {                                                               \
+    FD->bk = BK;                                                       \
+    BK->fd = FD;                                                       \
+  }                                                                    \
+}
+```
+
+My first thought while preparing any exploit was:
+> Ok, just make ```B->bk``` point to ret addy on the stack and overwrite it with address of ```shell()```, which gets written into ```B->fd```.
