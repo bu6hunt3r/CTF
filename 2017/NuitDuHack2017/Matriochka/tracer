@@ -1,0 +1,17 @@
+define fc 
+	set follow-fork-mode child
+end
+
+define fp
+        set follow-fork-mode parent
+end
+
+b *0x00400940
+commands 1
+        fp
+end
+
+b *0x004009a8
+commands 2
+        fp
+end

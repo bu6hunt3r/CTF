@@ -5,3 +5,13 @@
 
 The routine that is responsible for unlinking a node out of double linked list gave me flashbacks on famous ```unlink()``` macro implemented in dlmalloc/ptmalloc, but with no security mitigations.
 
+```C
+void unlink(OBJ* P){
+	OBJ* BK;
+	OBJ* FD;
+	BK=P->bk;
+	FD=P->fd;
+	FD->bk=BK;
+	BK->fd=FD;
+}
+```
