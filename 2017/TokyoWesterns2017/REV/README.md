@@ -98,5 +98,4 @@ Briefly said, functions 1, 2 and 4 are doing the following:
 
 But there are symbolic exexution engines like angr for god's sake. There we have the possibility to define that path we want to go ant these we want to avoid. I used [r4ge](https://github.com/gast04/r4ge) plugin in radare2 for that.
 
- 
-- 
+ [![asciicast](https://asciinema.org/a/xRHwboc6hvxdsD7DZOMwwTu0v.png)](https://asciinema.org/a/xRHwboc6hvxdsD7DZOMwwTu0v) 
