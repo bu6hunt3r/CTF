@@ -1,0 +1,6 @@
+#!/usr/bin/rarun2
+
+program=bf
+stdin=input.txt
+stdout=/dev/pts/5
+
