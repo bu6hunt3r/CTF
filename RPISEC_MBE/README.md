@@ -196,3 +196,8 @@ So summarized there are now the following two conditions:
 
 To solve these equations I used one of my favourite toolset: z3. The script is provided in "lab1B.py"
 [![asciicast](https://asciinema.org/a/Z4sFerJotqJG03pw48Vq86gqd.png)](https://asciinema.org/a/Z4sFerJotqJG03pw48Vq86gqd)
+
+### Pass Lab1Bwq
+```
+1337_3nCRyptI0n_br0
+```
