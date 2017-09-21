@@ -76,6 +76,36 @@ So in ```main``` there's the prompt. So let's seek to that:
 
 ```
 
+│          0x080486ea    89442404       mov dword [esp + 4], eax        ; [0x4:4]=0x10101 
+│          0x080486ee    c70424188804.  mov dword [esp], 0x8048818      ; [0x8048818:4]=0xa006425  ; "%d" @ 0x8048818
+│          0x080486f5    e8a6feffff     call sym.imp.__isoc99_scanf    ;[3] ;sym.imp.__isoc99_scanf()
+```
+
+So at 0x080486f5 there's a call to ```scanf()``` which stores our input in a locally stored variable at esp+0x1C. What's the format specifier at 0x8048818?
+
+```
+:> ps @ 0x8048818
+%d
+``` 
+
+It treats our input as integer, which is then compared to another int at 0x080486fe:
+
+```
+0x080486fe    3d9a140000     cmp eax, 0x149a 
+```
+
+Our input just has to be 0x149a and we will be faced with a shell afterwars. Fort lazy people lik me there's a radare built-in functionality to compare numbers:
+
+```
+:> ? 0x149a
+5274 0x149a 012232 5.2K 0000:049a 5274 10011010 5274.0 0.000000f 0.000000
+```
+
+You could also use the tool ```rax2``` provided by radare framework to complete that task:
+
+```
+:> !!rax2 0x149a
+5274
 ```
 
 [![asciicast](https://asciinema.org/a/xIvKfysNoDOXShVBcp9mVCncU.png)](https://asciinema.org/a/xIvKfysNoDOXShVBcp9mVCncU)
