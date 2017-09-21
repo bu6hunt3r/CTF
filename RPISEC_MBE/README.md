@@ -109,3 +109,8 @@ You could also use the tool ```rax2``` provided by radare framework to complete 
 ```
 
 [![asciicast](https://asciinema.org/a/xIvKfysNoDOXShVBcp9mVCncU.png)](https://asciinema.org/a/xIvKfysNoDOXShVBcp9mVCncU)
+
+### Pass
+```
+n0_str1ngs_n0_pr0bl3m
+```
