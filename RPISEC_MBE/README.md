@@ -72,6 +72,10 @@ d 0x80486da mov dword [esp], str._nPassword:
    0x0804880c     .string "\\nPassword: " ; len=12
 ```
 
-So in ```main``` there's the promt. So let's seek to that:
+So in ```main``` there's the prompt. So let's seek to that:
 
+```
 
+```
+
+asciicast](https://asciinema.org/a/xIvKfysNoDOXShVBcp9mVCncU.png)](https://asciinema.org/a/xIvKfysNoDOXShVBcp9mVCncU)
