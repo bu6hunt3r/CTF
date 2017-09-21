@@ -194,4 +194,5 @@ So summarized there are now the following two conditions:
 - diff = Input - 0x1337d00d <= 0x15
 - diff ^ b"bQ}|u`sfg~sf{}|a3" = b"Congratulations_"
 
+To solve these equations I used one of my favourite toolset: z3. The script is provided in "lab1B.py"
 [![asciicast](https://asciinema.org/a/Z4sFerJotqJG03pw48Vq86gqd.png)](https://asciinema.org/a/Z4sFerJotqJG03pw48Vq86gqd)
