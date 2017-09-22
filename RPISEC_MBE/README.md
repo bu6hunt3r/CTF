@@ -201,3 +201,61 @@ To solve these equations I used one of my favourite toolset: z3. The script is p
 ```
 1337_3nCRyptI0n_br0
 ```
+
+## Lab1A
+
+### Recon
+
+After entering some arbitrary username, the program extpects us to input a serial:
+
+```
+$ ./lab1A
+.---------------------------.
+|---------  RPISEC  --------|
+|+ SECURE LOGIN SYS v. 3.0 +|
+|---------------------------|
+|~- Enter your Username:  ~-|
+'---------------------------'
+???
+.---------------------------.
+| !! NEW ACCOUNT DETECTED !!|
+|---------------------------|
+|~- Input your serial:    ~-|
+'---------------------------'
+```
+
+Let's check the conditions on the serial we have to met.
+At 0x08048c12 there's a call to ```scanf()```, which treats out input as unsigned int:
+
+```
+:> ps @ 0x8048d00
+%u
+```
+
+After entering input ```auth``` gets called which will write all input bytes up to newline char to a pointer pointing to ebp+8:
+
+```
+0x08048a15	  mov dword [esp + 4], 0x8048d03  ; [0x8048d03:4]=10 
+0x08048a1d	  mov eax, dword [ebp + 8]        ; [0x8:4]=0                
+0x08048a20	  mov dword [esp], eax                               
+0x08048a23	  call sym.imp.strcspn  
+```
+
+After wards length of our input is checked via ```strlen()``` with maclen of 32 bytes:
+
+```
+0x08048a30	  mov dword [esp + 4], 0x20       ; [0x20:4]=0x2168  ; "h!" 0x00000020
+0x08048a38	  mov eax, dword [ebp + 8]        ; [0x8:4]=0
+0x08048a3b	  mov dword [esp], eax
+0x08048a3e	  call sym.imp.strnlen 
+```
+
+In main we observe, that auth has to return 0, and we'll be faced with shell.
+
+input += 3
+(input_LSB ^ 0x1337) + 0x5eeded <= 0
+
+### Pass Lab1A
+```
+1uCKy_Gue55
+```
