@@ -1067,5 +1067,5 @@ wh0_n33ds_5hchild is exiting...
 ## Pass Lab3A
 
 ```
-wh0_n33ds_5hchild is exiting...
+wh0_n33ds_5h3ll3_wh3n_U_h4z_s4nd
 ```
