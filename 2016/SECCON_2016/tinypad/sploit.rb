@@ -25,18 +25,56 @@ class MyTube < Sock
 		recvuntil(pre)
 		sendline(post)
 	end
+	def recv_until_prompt
+		recvuntil("(CMD)>>> ")
+	end
 end
 
-z=MyTube.new "localhost", 54321
+def tube
+	@tube
+end
+
+def alloc(size, content)
+	tube.recv_until_prompt
+	tube.sendline("A")
+	tube.sendlineafter("(SIZE)>>> ", "#{size}")
+	tube.sendlineafter("(CONTENT)>>> ", content)
+end
+
+def free(index)
+	tube.recv_until_prompt
+	tube.sendline("D")
+	tube.sendlineafter("(INDEX)>>> ", "#{index}")
+end
+
+def edit_memo(index, content)
+	tube.recv_until_prompt
+	tube.sendline("E")
+	tube.sendlineafter("(INDEX)>>> ", "#{index}")
+	tube.sendlineafter("(CONTENT)>>> ", content)
+	tube.recv_until("(Y/n)>>> ")
+	tube.sendline("Y")
+end
+
+#z=MyTube.new "localhost", 54321
+MyTube.new("localhost", 54321) do |z|
+puts "Starting..."
+@tube=z
 pid=`pidof tinypad`.split.first
-z.sendlineafter("(CMD)>>> ", "A")
-z.sendlineafter("(SIZE)>>> ", "12")
-z.sendlineafter("(CONTENT)>>> ", "A"*12)
-
-
 puts "[DEBUG] %s Continue?" % [pid]
 gets
-
+alloc(12,"A"*12)
 data=z.recvuntil("(CMD)>>> ")
 puts data
 
+#z.sendlineafter("(CMD)>>> ", "A")
+#z.sendlineafter("(SIZE)>>> ", "12")
+#z.sendlineafter("(CONTENT)>>> ", "A"*12)
+#
+#
+#puts "[DEBUG] %s Continue?" % [pid]
+#gets
+#
+#data=z.recvuntil("(CMD)>>> ")
+#puts data
+end
