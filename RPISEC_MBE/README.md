@@ -1846,3 +1846,69 @@ int main(int argc, char* argv[])
 }
 ```
 
+## Lab7C
+Welcome to heap exploit. That time i won't paste the whole source code here, but just the major spots of it. The application interacts with user with prompting him to supply a number or a string, which gets stored on heap afterwards. For that it creates two structures containing the data supplied by user and a pointer to a function that will be used for displaying user's notes:
+
+```C
+#define MAX_STR 6
+#define MAX_NUM 6
+
+struct data {
+    char reserved[8];
+    char buffer[20];
+    void (* print)(char *);
+};
+
+struct number {
+    unsigned int reserved[6];               // implement later
+    void (* print)(unsigned int);
+    unsigned int num;
+};
+```
+Depending on the length of your string and size of the number, different functions for printing wille be called afterwards when attempting to display them on screen with using menu's "print" options. 
+Ok, numbers and strings get stored on heap, we can display them and we also got the possibilty to "free" them. On fact you have to know is, that calling libc's ```free()``` function just advises the internal allocator to free any previously used chunk for possible reallocation later on and to avoid any fragmentation on heap's dynamic memory.
+So the major bug here lies in the fact, that memory doesn't get zeroed out when free'ing it. If you free any chunk and allocate another one afterwards you'll be able to access data already "free'd". If you look closely into application's source code, you may observe, that when freeing any chunk, just the reference to that memory area gets cleared, but not the memory area itself:
+
+```C
+if(strcnt && strings[strcnt])
+            {
+                free(strings[strcnt--]);
+                printf("Deleted most recent string!\n");
+            }
+            else
+                printf("There are no strings left to delete!\n");
+```
+```C
+if(numcnt && numbers[numcnt])
+            {
+                free(numbers[numcnt--]);
+                printf("Deleted most recent number!\n");
+            }
+            else
+                printf("There are no numbers left to delete!\n");
+```
+
+As a nice consequence we have a Use-after-free (UAF) condition here, that can easily be triggered and allows us to exploit applications behaviuor. If you look at the structs again, free'in a String-chunk and allocating a Number-chunk afterwards allows us to overwrite the pointer to print function that will be called when displaying any data in that chunk.
+Compare source-code and disassambly of the region where one of the two print functions gets called:
+
+```
+0x00001043      837c243805     cmp dword [local_38h], 5    ; [0x5:4]=257
+0x00001048      772c           ja 0x1076                   ;[1]    
+0x0000104a      8b442438       mov eax, dword [local_38h]  ; [0x38:4]=52 ; '8' ; "4"    
+0x0000104e      8b44843c       mov eax, dword [esp + eax*4 + 0x3c] ; [0x3c:4]=52 ; '<' ; "4"    
+0x00001052      85c0           test eax, eax                                                                                                     
+0x00001054      7420           je 0x1076                   ;[1]    
+0x000010b7      8b442438       mov eax, dword [local_38h]  ; [0x38:4]=52 ; '8' ; "4"
+0x000010bb      8b448454       mov eax, dword [esp + eax*4 + 0x54] ; [0x54:4]=3 ; 'T'
+0x000010bf      8b4018         mov eax, dword [eax + 0x18] ; [0x18:4]=0x970 entry0 ; "p\t"
+0x000010c2      8b542438       mov edx, dword [local_38h]  ; [0x38:4]=52 ; '8' ; "4"
+0x000010c6      8b549454       mov edx, dword [esp + edx*4 + 0x54] ; [0x54:4]=3 ; 'T'
+0x000010ca      8b521c         mov edx, dword [edx + 0x1c] ; [0x1c:4]=52 ; "4"
+0x000010cd      891424         mov dword [esp], edx
+0x000010d0      ffd0           call eax
+```
+
+```C
+if(index < MAX_STR && strings[index])
+                strings[index]->print(strings[index]->buffer);
+```
