@@ -15,23 +15,24 @@ class Huffman_code
 		return @@table[binary]
 	end
 
-	@@hist=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ]
+	@@hist = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ]
 
-	shellcode="hello, world"
-
+	#shellcode = "\xeb\xfe"
+	#shellcode = "\xcd\x03"
+	out=""
+	shellcode = "hello world, this is my shellcode!"
 	shellcode.each_byte do |b|
-		n1=b >> 4
-		n2=b & 0x0f
+		n1 = b >> 4
+		n2 = b & 0x0f
 
-		puts("n1=%x" % n1)
-		puts("n2=%x" % n2)
+		puts("n1 = %x" % n1)
+		puts("n2 = %x" % n2)
 
-		@@hist[n1]+=1
-		@@hist[n2]+=1
+		@@hist[n1] += 1
+		@@hist[n2] += 1
 
-		out+=((self.encode_nibble(n1) << 4) | (self.encode_nibble(n2) & 0x0f)).chr
+		out += ((encode_nibble(n1) << 4) | (encode_nibble(n2) & 0x0F)).chr
 		puts out
 	end
 end
 
-h=huffman_code.new
