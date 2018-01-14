@@ -81,6 +81,10 @@ def set_eax(n, prev=None):
         n ^= cpu.eax
     else:
         n ^= prev
+    b0, b1, b2, b3 = (n>>0)&0xFF, (n>>8)&0xFF, (n>>16)&0xFF, (n>>24)&0xFF
+    g0, g1, g2, g3 = byte_generators[b0], byte_generators[b1], byte_generators[b2], byte_generators[b3]
+
+    return zip(g0,g1,g2,g3)
     
 
 def set_ebx(val):
@@ -110,6 +114,12 @@ def main():
         first_stage+=patch_dword(0x1337c00+i, u32(second_stage[i:i+4]))
     '''
     bytes=gen_byte_generator()
-    print bytes
+    #print bytes
+    (a1,a2,a3,a4)=set_eax(0x53)
+    print a1    
+    print a2    
+    print a3    
+    print a4    
+
 if __name__ == '__main__':
     main()
