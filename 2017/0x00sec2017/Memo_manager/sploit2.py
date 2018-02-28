@@ -1,8 +1,9 @@
+#!/usr/bin/env python
 from pwn import *
 
 GOT = 0x601f90
 
-libc=ELF("/usr/lib/libc.so.6")
+libc=ELF("/lib/x86_64-linux-gnu/libc.so.6")
 puts=libc.symbols['puts']
 
 context.update(arch="amd64", os='linux', log_level="info")
